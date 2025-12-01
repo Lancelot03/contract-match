@@ -1,377 +1,328 @@
 import streamlit as st
-from streamlit_option_menu import option_menu
-from openai import AzureOpenAI
-import docx2txt
-import PyPDF2
-import os
-from pdfminer.high_level import extract_text
-class OpenaiAPI():
-  def __init__(self) -> None:
+import anthropic
+import json
+from io import StringIO
+import pypdf
+import docx
 
-      self.client = AzureOpenAI(
-          api_key = os.environ["API"],
-          api_version="2023-07-01-preview",
-          azure_endpoint=os.environ["URL"],
-      )
+# --- Helper Functions for File Reading ---
+def read_file_content(uploaded_file):
+    """
+    Reads text from uploaded .txt, .pdf, or .docx files.
+    Returns the extracted text as a string.
+    """
+    if uploaded_file is None:
+        return ""
+    
+    try:
+        # Handle PDF files
+        if uploaded_file.type == "application/pdf":
+            reader = pypdf.PdfReader(uploaded_file)
+            text = ""
+            for page in reader.pages:
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
+            return text
+        
+        # Handle Word documents
+        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            doc = docx.Document(uploaded_file)
+            text = "\n".join([para.text for para in doc.paragraphs])
+            return text
+        
+        # Handle Plain Text files
+        else: 
+            # Decode bytes to string
+            stringio = StringIO(uploaded_file.getvalue().decode("utf-8"))
+            return stringio.read()
+            
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
+        return ""
 
-  def get_response(self,prompt,) -> str:
-      try:
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Orane Contract Analyzer",
+    page_icon="⚖️",
+    layout="wide"
+)
 
-          completion = self.client.chat.completions.create(
-              model="GPT-4o",  # e.g. gpt-35-instant
-              messages=prompt,
-              temperature=0,)
-          return completion.choices[0].message.content
+# --- CSS Styling ---
+# This mimics the look and feel of the React cards using CSS grid/flexbox
+st.markdown("""
+<style>
+    .metric-card {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+        text-align: center;
+        background-color: white;
+        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+    .metric-card h3 {
+        margin: 0;
+        font-size: 1.875rem;
+        line-height: 2.25rem;
+        font-weight: 700;
+    }
+    .metric-card p {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        font-weight: 500;
+    }
+    
+    /* Severity Colors */
+    .critical { background-color: #fef2f2; border-color: #fecaca; }
+    .critical h3 { color: #dc2626; }
+    .critical p { color: #b91c1c; }
+    
+    .moderate { background-color: #fff7ed; border-color: #fed7aa; }
+    .moderate h3 { color: #ea580c; }
+    .moderate p { color: #c2410c; }
+    
+    .minor { background-color: #fefce8; border-color: #fef08a; }
+    .minor h3 { color: #ca8a04; }
+    .minor p { color: #a16207; }
+    
+    /* Risk Badges */
+    .risk-high { background-color: #fee2e2; color: #dc2626; border-color: #fecaca; }
+    .risk-medium { background-color: #ffedd5; color: #ea580c; border-color: #fed7aa; }
+    .risk-low { background-color: #dcfce7; color: #16a34a; border-color: #bbf7d0; }
+    
+    /* Header styling */
+    h1 { color: #1f2937; }
+</style>
+""", unsafe_allow_html=True)
 
-      except Exception as e:
-          print("An error occurred while generate prompt from openai api: %s", e)
+# --- Sidebar (API Key Input) ---
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    api_key = st.text_input(
+        "Anthropic API Key", 
+        type="password", 
+        help="Enter your Claude API Key here. It starts with 'sk-ant...'"
+    )
+    st.info("Your API key is not stored. It is used only for this session.")
+    st.markdown("[Get an API key here](https://console.anthropic.com/)")
 
-  def docx_to_text(self,docx_path):
-      text = docx2txt.process(docx_path)
-      return text
+# --- Main App Interface ---
 
-  def pdf_to_text_pypdf2(self,pdf_file):
-      text = extract_text(pdf_file)
-      return text
+# Title Section
+col1, col2 = st.columns([1, 15])
+with col1:
+    st.write("# ⚖️") 
+with col2:
+    st.title("Orane Contract Compliance Analyzer")
 
 st.markdown("""
-      <style>
-      h1#contract-ai {
-      text-align: center;
-      }
-      header.st-emotion-cache-12fmjuu.ezrtsby2{
-        background-color: rgb(234 237 240);
-        color: rgb(0, 0, 0);
-      }
-      .st-emotion-cache-1mi2ry5{
-        background:url('https://external-content.duckduckgo.com/iu/?u=https%3A%2F%2Ftheindustryspread.com%2Fwp-content%2Fuploads%2F2019%2F05%2FBroadridge-1.png') no-repeat;
-        background-size: 250px 50px;
-        background-position: center;
-      }
-      </style>
-  """, unsafe_allow_html=True)
-with st.sidebar:
-    selected = option_menu("CONTRACT AI", ['Home','Tags','Clauses',
-                                           'Summarizer','Headings','Extract Date',
-                                           'Pdf to Json','Key Values','Incorrent Sentences',
-                                           'Incompleted Sentences','Agressive Content',
-                                           'Compare Contract','Find Contract',"Contract Generator"
-                                           ],
-                           icons=['arrow-right-circle-fill','arrow-right-circle-fill','arrow-right-circle-fill',
-                                                    'arrow-right-circle-fill','arrow-right-circle-fill','arrow-right-circle-fill',
-                                                    'arrow-right-circle-fill','arrow-right-circle-fill','arrow-right-circle-fill',
-                                                    'arrow-right-circle-fill','arrow-right-circle-fill','arrow-right-circle-fill',
-                                                    'arrow-right-circle-fill','arrow-right-circle-fill'],
-                           menu_icon="house-gear-fill",
-                           default_index=0)
-    uploaded_file=st.file_uploader("Upload a Docs")
-openai = OpenaiAPI()
-if selected == 'Home':
-  st.title('Contract AI')
-  # Dictionary containing the topics and their descriptions
-  topics = {
-    "None": "Default option with no specific action.",
-    "Tags": "Extract tags or keywords from the document.",
-    "Clauses": "Identify and extract specific clauses from contracts.",
-    "Summarizer": "Generate a concise summary of the document.",
-    "Headings": "Extract and display headings from the document.",
-    "Extract Date": "Find and extract dates from the document.",
-    "Pdf to Json": "Convert PDF documents to JSON format.",
-    "Key Values": "Extract key-value pairs from the document.",
-    "Incorrect Sentences": "Identify and highlight incorrect sentences.",
-    "Incomplete Sentences": "Detect and list incomplete sentences.",
-    "Aggressive Content": "Identify and flag aggressive or inappropriate content.",
-    "Compare Contract": "Compare two contracts to find differences.",
-    "Find Contract": "Search and locate specific contracts.",
-    "Contract Generator": "Generate a contract based on provided inputs."
-  }
+This tool compares a **Third-Party Contract** against **Orane's Standard Contract** to automatically identify 
+violations, critical deviations, and business risks.
+""")
 
-  # Custom CSS for the gray background
-  st.markdown("""
-      <style>
-      h1#contract-ai {
-      text-align: center;
-      }
-      .topic-box {
-          background-color: #f0f0f0;
-          padding: 10px;
-          border-radius: 5px;
-          margin-bottom: 10px;
-      }
-      .topic-box:hover{
-        background-color: #000080;
-        box-shadow: 6px 1px 12px gray;
-        color:#fff;
-      }
-      .topic-title {
-          font-weight: bold;
-      }
-      .st-emotion-cache-ocqkz7 {
-        gap: 1.5rem;
-        }
-      </style>
-  """, unsafe_allow_html=True)
+st.divider()
 
-  # Split topics into groups of three for a 3-column layout
-  topic_items = list(topics.items())
-  for i in range(0, len(topic_items), 3):
-      cols = st.columns(3)
-      for col, (title, description) in zip(cols, topic_items[i:i+3]):
-          col.markdown(f"""
-          <div class="topic-box">
-              <div class="topic-title">{title}</div>
-              <div>{description}</div>
-          </div>
-          """, unsafe_allow_html=True)
-elif selected == 'Contract Generator':
-  st.markdown(
-      """
-  <style>
-      h1,#contract-generator,#extract-date,#pdf-to-json,#key-values {
-        text-align: center;
-      }
-  </style>
-  """,
-      unsafe_allow_html=True,)
-  st.title(selected)
-  contract_info=st.text_input("Enter Contract info")
-  conversation = [{"role": "system", "content": """You are a helpful assistant. Your task is creating a complete contract with important terms and condiations based on the contract information and type.
-                  the contract type given by user.
-                  generate a contract :
-                  """},
-                  {"role": "user", "content": f"```content: {contract_info}```"}]
-  get_response = openai.get_response(conversation)
-  st.write(get_response)
+# --- File Upload Section ---
+col_orane, col_third = st.columns(2)
 
-elif selected == 'Extract Date':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful assistant.
-                  Your task is Identify Dates and Durations Mentioned in the contract and extract that date and duration in key-value pair.
-                  format:
-                  date:
-                  -extracted date
-                  -
-                  Durations:
-                  -extracted Durations
-                  -
-                  - """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-      st.write('Upload File')
-elif selected == 'Pdf to Json':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful assistant.
-                  Your task is Get the text and analyse and split it into Topics and Content in json format.Give Proper Name to Topic dont give any Numbers and Dont Give any empty Contents.The Output Format Should Be very good."""},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
-elif selected == 'Key Values':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful Keywords Extracter..
-                  analyze the given contract and Extract Keywords for following contract in triple backticks. tags should be bullet points.contract :
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
+# Column 1: Standard Contract
+with col_orane:
+    st.subheader("1. Orane's Standard Contract")
+    orane_file = st.file_uploader("Upload Standard Contract", type=['txt', 'pdf', 'docx'], key="orane")
+    
+    # Initialize session state for text if it doesn't exist
+    if "orane_text" not in st.session_state:
+        st.session_state.orane_text = ""
 
-elif selected == 'Tags':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful Tags Extracter.
-                  analyze the given contract to extract tags for following contract in triple backticks.
-                  tags should be bullet points.contract :
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
+    # If file is uploaded, extract text
+    if orane_file:
+        content = read_file_content(orane_file)
+        if content != st.session_state.orane_text:
+            st.session_state.orane_text = content
+            
+    # Text Area for manual editing or viewing
+    orane_text = st.text_area(
+        "Standard Contract Text", 
+        value=st.session_state.orane_text, 
+        height=300,
+        placeholder="Paste text here or upload a file above..."
+    )
+    if orane_text:
+        st.success(f"Loaded {len(orane_text)} characters")
 
-elif selected == 'Clauses':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful Cluases and SubCluases Extracter From Given Content
-                  Extract clauses and sub-clauses from the provided contract PDF
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
+# Column 2: Third Party Contract
+with col_third:
+    st.subheader("2. Third-Party Contract")
+    third_file = st.file_uploader("Upload Third-Party Contract", type=['txt', 'pdf', 'docx'], key="third")
+    
+    if "third_text" not in st.session_state:
+        st.session_state.third_text = ""
 
-elif selected == 'Headings':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful document assistant.
-                  Extract Headings from given paragraph do not generate jsu extract the headings from paragraph.
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
+    if third_file:
+        content = read_file_content(third_file)
+        if content != st.session_state.third_text:
+            st.session_state.third_text = content
+            
+    third_text = st.text_area(
+        "Third-Party Contract Text", 
+        value=st.session_state.third_text, 
+        height=300,
+        placeholder="Paste text here or upload a file above..."
+    )
+    if third_text:
+        st.success(f"Loaded {len(third_text)} characters")
 
-elif selected == 'Incorrent Sentences':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful Error sentence finder.
-                  list out the grammatical error sentence in the given text:
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
+# --- Analyze Button ---
+st.divider()
+analyze_btn = st.button("🔍 Analyze Contracts for Violations", type="primary", use_container_width=True)
 
-elif selected == 'Incompleted Sentences':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                      You are a helpful incomplete sentences finder.
-                      list out the incomplete sentences in the following text:
-                      """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
-
-elif selected == 'Agressive Content':
-  st.title(selected)
-  if uploaded_file is not None:
-    print('File Name : ',uploaded_file.name)
-    ftype=uploaded_file.name.split('.')
-    if ftype[-1]=='pdf':
-      docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-    elif ftype[-1]=='docx':
-      docs_data = openai.docx_to_text(uploaded_file)
-    conversation = [{"role": "system", "content": """
-                  You are a helpful Keywords Extracter..
-                  analyze the given contract and Extract Keywords for following contract in triple backticks. tags should be bullet points.contract :
-                  """},
-                  {"role": "user", "content": f"```contract: {docs_data}```"}]
-    get_response = openai.get_response(conversation)
-    st.write(get_response)
-  else:
-    st.write('Upload File')
-
-elif selected == 'Compare Contract':
-    st.title(selected)
-    uploaded_file2 = st.file_uploader("Upload a Second Contract for Comparison")
-    if uploaded_file is not None and uploaded_file2 is not None:
-        print('File Name : ', uploaded_file.name)
-        print('File Name : ', uploaded_file2.name)
-        ftype1 = uploaded_file.name.split('.')
-        ftype2 = uploaded_file2.name.split('.')
-        if ftype1[-1] == 'pdf' and ftype2[-1] == 'pdf':
-            docs_data1 = openai.pdf_to_text_pypdf2(uploaded_file)
-            docs_data2 = openai.pdf_to_text_pypdf2(uploaded_file2)
-        elif ftype1[-1] == 'docx' and ftype2[-1] == 'docx':
-            docs_data1 = openai.docx_to_text(uploaded_file)
-            docs_data2 = openai.docx_to_text(uploaded_file2)
-        conversation = [{"role": "system", "content": """
-                        You are a helpful contract comparison assistant.
-                        Compare the following two contracts and highlight any differences or similarities.
-                        """},
-                        {"role": "user", "content": f"```contract 1: {docs_data1}``` ```contract 2: {docs_data2}```"}]
-        get_response = openai.get_response(conversation)
-        st.write(get_response)
+# --- Logic: Call AI ---
+if analyze_btn:
+    # Validation
+    if not api_key:
+        st.error("❌ Please enter your Anthropic API Key in the sidebar to proceed.")
+    elif not orane_text or not third_text:
+        st.warning("⚠️ Please ensure both contracts have text loaded before analyzing.")
     else:
-        st.write('Upload Both Files')
+        # Initialize Client
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        # Construct Prompt
+        prompt = f"""You are a legal contract analysis AI. Compare the third-party contract against Orane's standard contract and identify violations, deviations, and risks.
 
-elif selected == 'Find Contract':
-    st.title(selected)
-    contract_search = st.text_input("Enter Contract Information to Search")
-    if contract_search:
-        conversation = [{"role": "system", "content": """
-                        You are a helpful contract finder.
-                        Search and locate the specific contract based on the following information:
-                        """},
-                        {"role": "user", "content": f"```search: {contract_search}```"}]
-        get_response = openai.get_response(conversation)
-        st.write(get_response)
-    else:
-        st.write('Enter Information to Search')
+ORANE'S STANDARD CONTRACT:
+{orane_text}
 
-elif selected == 'Summarizer':
-    st.title(selected)
-    if uploaded_file is not None:
-        print('File Name : ', uploaded_file.name)
-        ftype = uploaded_file.name.split('.')
-        if ftype[-1] == 'pdf':
-            docs_data = openai.pdf_to_text_pypdf2(uploaded_file)
-        elif ftype[-1] == 'docx':
-            docs_data = openai.docx_to_text(uploaded_file)
-        conversation = [{"role": "system", "content": """
-                        You are a helpful summarizer.
-                        Write a concise summary of the following contract:
-                        """},
-                        {"role": "user", "content": f"```contract: {docs_data}```"}]
-        get_response = openai.get_response(conversation)
-        st.write(get_response)
-    else:
-        st.write('Upload File')
+THIRD-PARTY CONTRACT TO ANALYZE:
+{third_text}
+
+Analyze the third-party contract and provide a JSON response with the following structure (respond ONLY with valid JSON, no markdown):
+{{
+  "summary": {{
+    "totalIssues": number,
+    "criticalViolations": number,
+    "moderateDeviations": number,
+    "minorConcerns": number,
+    "overallRisk": "HIGH" | "MEDIUM" | "LOW"
+  }},
+  "violations": [
+    {{
+      "category": "Payment Terms" | "Liability" | "Termination" | "IP Rights" | "Confidentiality" | "Warranties" | "Jurisdiction" | "Other",
+      "severity": "CRITICAL" | "MODERATE" | "MINOR",
+      "title": "Brief title of the issue",
+      "oraneClause": "Relevant clause from Orane's contract",
+      "thirdPartyClause": "Relevant clause from third-party contract",
+      "violation": "Detailed explanation of how it violates or deviates",
+      "recommendation": "Suggested action or amendment",
+      "riskImpact": "Business/legal risk this poses"
+    }}
+  ]
+}}"""
+
+        try:
+            with st.spinner("🤖 Analyzing contracts... This may take up to 30 seconds."):
+                # Call Claude API
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20240620",
+                    max_tokens=4000,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ]
+                )
+                
+                # Extract Response
+                response_text = message.content[0].text
+                
+                # Clean JSON (remove markdown code blocks if present)
+                clean_json = response_text.replace("```json", "").replace("```", "").strip()
+                
+                # Parse JSON
+                analysis = json.loads(clean_json)
+                
+                # Save to session state so it doesn't disappear on refresh
+                st.session_state.analysis_result = analysis
+
+        except anthropic.APIError as e:
+            st.error(f"Anthropic API Error: {str(e)}")
+        except json.JSONDecodeError:
+            st.error("Error parsing AI response. The model did not return valid JSON. Please try again.")
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {str(e)}")
+
+# --- Display Results ---
+if "analysis_result" in st.session_state:
+    data = st.session_state.analysis_result
+    summary = data.get("summary", {})
+    
+    st.markdown("## 📊 Analysis Report")
+    
+    # 1. Summary Metrics Display
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.markdown(f"""
+        <div class="metric-card critical">
+            <h3>{summary.get("criticalViolations", 0)}</h3>
+            <p>Critical Violations</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"""
+        <div class="metric-card moderate">
+            <h3>{summary.get("moderateDeviations", 0)}</h3>
+            <p>Moderate Deviations</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"""
+        <div class="metric-card minor">
+            <h3>{summary.get("minorConcerns", 0)}</h3>
+            <p>Minor Concerns</p>
+        </div>
+        """, unsafe_allow_html=True)
+    with m4:
+        risk = summary.get("overallRisk", "UNKNOWN")
+        risk_class = f"risk-{risk.lower()}" if risk.lower() in ["high", "medium", "low"] else ""
+        st.markdown(f"""
+        <div class="metric-card {risk_class}">
+            <h3>{risk}</h3>
+            <p>Overall Risk</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.write("") # Spacer
+
+    # 2. Detailed Violations List
+    st.subheader("Detailed Findings")
+    violations = data.get("violations", [])
+    
+    if not violations:
+        st.info("No violations found! The contracts seem to align perfectly.")
+    
+    for i, v in enumerate(violations):
+        # Set icon based on severity
+        severity = v.get('severity', 'MINOR')
+        if severity == "CRITICAL":
+            icon = "🔴"
+        elif severity == "MODERATE":
+            icon = "🟠"
+        else:
+            icon = "🟡"
+            
+        with st.expander(f"{icon} {v.get('title', 'Issue')} ({v.get('category', 'General')})"):
+            st.caption(f"**Severity:** {severity}")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                st.info(f"**📋 Orane's Standard:**\n\n_{v.get('oraneClause', 'N/A')}_")
+            with c2:
+                st.error(f"**⚠️ Third-Party Clause:**\n\n_{v.get('thirdPartyClause', 'N/A')}_")
+            
+            st.markdown(f"**🔍 Violation Details:** \n{v.get('violation', 'No details provided.')}")
+            st.markdown(f"**💼 Risk Impact:** \n{v.get('riskImpact', 'No risk impact provided.')}")
+            st.success(f"**💡 Recommendation:** \n{v.get('recommendation', 'No recommendation provided.')}")
+
+# --- Footer ---
+st.divider()
+st.caption("Contract Compliance Analyzer • Built with Streamlit & Claude")
