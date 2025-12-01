@@ -1,12 +1,6 @@
-openai
 streamlit
-pypdf2
-azure-identity
-streamlit-option-menu
-docx2txt
-PyPDF2
-pdfminer.six
 pandas
 numpy
-python-docx
+anthropic
 pypdf
+python-docx
