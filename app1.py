@@ -229,7 +229,7 @@ if analyze_btn:
             with st.spinner("🤖 Analyzing contracts... This may take up to 30 seconds."):
                 # Call OpenAI Chat Completions API
                 response = client.chat.completions.create(
-                    model="gpt-4o", # Using GPT-4o for best-in-class performance and JSON adherence
+                    model="o3-mini", # Using GPT-4o for best-in-class performance and JSON adherence
                     response_format={"type": "json_object"}, # Enforce JSON output
                     messages=[
                         {"role": "system", "content": system_prompt},
