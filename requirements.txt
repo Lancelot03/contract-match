@@ -4,3 +4,4 @@ numpy
 anthropic
 pypdf
 python-docx
+openai
